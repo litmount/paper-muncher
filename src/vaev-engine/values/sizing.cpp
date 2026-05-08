@@ -24,6 +24,38 @@ export enum struct BoxSizing : u8 {
     BORDER_BOX,
 };
 
+// https://www.w3.org/TR/css-images-4/#the-object-fit
+export enum struct ObjectFit : u8 {
+    FILL,
+    CONTAIN,
+    COVER,
+    NONE,
+    SCALE_DOWN,
+
+    _LEN
+};
+
+export template <>
+struct ValueParser<ObjectFit> {
+    static Res<ObjectFit> parse(Cursor<Css::Sst>& c) {
+        if (c.ended())
+            return Error::invalidData("unexpected end of input");
+
+        if (c.skip(Css::Token::ident("fill")))
+            return Ok(ObjectFit::FILL);
+        else if (c.skip(Css::Token::ident("contain")))
+            return Ok(ObjectFit::CONTAIN);
+        else if (c.skip(Css::Token::ident("cover")))
+            return Ok(ObjectFit::COVER);
+        else if (c.skip(Css::Token::ident("none")))
+            return Ok(ObjectFit::NONE);
+        else if (c.skip(Css::Token::ident("scale-down")))
+            return Ok(ObjectFit::SCALE_DOWN);
+        else
+            return Error::invalidData("expected object-fit value");
+    }
+};
+
 // MARK: FitContent
 // https://drafts.csswg.org/css-sizing-3/#preferred-size-properties
 
@@ -61,6 +93,7 @@ export struct SizingProps {
     Size width = Keywords::AUTO, height = Keywords::AUTO;
     Size minWidth = Keywords::AUTO, minHeight = Keywords::AUTO;
     MaxSize maxWidth = Keywords::NONE, maxHeight = Keywords::NONE;
+    ObjectFit objectFit = ObjectFit::FILL;
 
     Size& size(Axis axis) {
         return axis == Axis::HORIZONTAL ? width : height;
@@ -94,6 +127,7 @@ export struct SizingProps {
         e(" minHeight={}", minHeight);
         e(" maxWidth={}", maxWidth);
         e(" maxHeight={}", maxHeight);
+        e(" objectFit={}", objectFit);
         e(")");
     }
 };

@@ -14,6 +14,90 @@ import :layout.layout;
 namespace Vaev::Layout {
 
 struct ReplacedFormatingContext : FormatingContext {
+    static Opt<f64> _intrinsicAspectRatio(Vec2Au intrinsicSize) {
+        if (intrinsicSize.y == 0_au)
+            return NONE;
+        return intrinsicSize.x.cast<f64>() / intrinsicSize.y.cast<f64>();
+    }
+
+    Au _resolveMinSize(Tree& tree, Box& box, Size const& size, Au relative, Au intrinsicSize) {
+        return size.visit(Visitor{
+            [&](CalcValue<PercentOr<Length>> const& calc) {
+                return resolve(tree, box, calc, relative);
+            },
+            [&](Keywords::MinContent const&) {
+                return intrinsicSize;
+            },
+            [&](Keywords::MaxContent const&) {
+                return intrinsicSize;
+            },
+            [&](FitContent const& fit) {
+                return min(intrinsicSize, resolve(tree, box, fit.value, relative));
+            },
+            [&](Keywords::Auto const&) {
+                return 0_au;
+            },
+        });
+    }
+
+    Au _resolveMaxSize(Tree& tree, Box& box, MaxSize const& size, Au relative, Au intrinsicSize) {
+        return size.visit(Visitor{
+            [&](CalcValue<PercentOr<Length>> const& calc) {
+                return resolve(tree, box, calc, relative);
+            },
+            [&](Keywords::MinContent const&) {
+                return intrinsicSize;
+            },
+            [&](Keywords::MaxContent const&) {
+                return intrinsicSize;
+            },
+            [&](FitContent const& fit) {
+                return min(intrinsicSize, resolve(tree, box, fit.value, relative));
+            },
+            [&](Keywords::None const&) {
+                return Limits<Au>::MAX;
+            },
+        });
+    }
+
+    Vec2Au _clampByMinMax(Tree& tree, Box& box, Input const& input, Vec2Au size, Vec2Au intrinsicSize, Opt<f64> aspectRatio) {
+        auto minWidth = _resolveMinSize(
+            tree, box,
+            box.style->sizing->minWidth,
+            input.containingBlock.x,
+            intrinsicSize.x
+        );
+        auto maxWidth = _resolveMaxSize(
+            tree, box,
+            box.style->sizing->maxWidth,
+            input.containingBlock.x,
+            intrinsicSize.x
+        );
+        auto minHeight = _resolveMinSize(
+            tree, box,
+            box.style->sizing->minHeight,
+            input.containingBlock.y,
+            intrinsicSize.y
+        );
+        auto maxHeight = _resolveMaxSize(
+            tree, box,
+            box.style->sizing->maxHeight,
+            input.containingBlock.y,
+            intrinsicSize.y
+        );
+
+        size.x = clamp(size.x, minWidth, maxWidth);
+        size.y = clamp(size.y, minHeight, maxHeight);
+
+        if (aspectRatio and input.knownSize.x and not input.knownSize.y) {
+            size.y = clamp(size.x / *aspectRatio, minHeight, maxHeight);
+        } else if (aspectRatio and input.knownSize.y and not input.knownSize.x) {
+            size.x = clamp(size.y * *aspectRatio, minWidth, maxWidth);
+        }
+
+        return size;
+    }
+
     Vec2Au updateRelativeTo(SvgRootBox& root, SvgRootFrag& svgFrag) {
         // https://svgwg.org/svg2-draft/coords.html#Units
         // SPEC: For <percentage> values that are defined to be relative to the size of SVG viewport:
@@ -101,7 +185,11 @@ struct ReplacedFormatingContext : FormatingContext {
         Vec2Au size = {};
 
         if (auto image = box.content.is<Rc<Scene::Node>>()) {
-            size = (*image)->bound().size().cast<Au>();
+            auto intrinsicSize = (*image)->bound().size().cast<Au>();
+            auto aspectRatio = _intrinsicAspectRatio(intrinsicSize);
+
+            size = _defaultSizing(input.knownSize, aspectRatio, intrinsicSize);
+            size = _clampByMinMax(tree, box, input, size, intrinsicSize, aspectRatio);
         } else if (auto svg = box.content.is<SvgRootBox>()) {
             auto aspectRatio = intrinsicAspectRatio(box.style->svg->viewBox, box.style->sizing->width, box.style->sizing->height);
 
