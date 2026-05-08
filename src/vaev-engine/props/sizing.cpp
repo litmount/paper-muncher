@@ -284,4 +284,38 @@ export struct MaxHeightProperty : Property {
     }
 };
 
+// https://www.w3.org/TR/css-images-4/#the-object-fit
+export struct ObjectFitProperty : Property {
+    struct Registration : Property::Registration {
+        Symbol name() const override {
+            return Properties::OBJECT_FIT;
+        }
+
+        Rc<Property> initial() const override {
+            return makeRc<ObjectFitProperty>(self(), ObjectFit::FILL);
+        }
+
+        Rc<Property> load(ComputedValues const& c) const override {
+            return makeRc<ObjectFitProperty>(self(), c.sizing->objectFit);
+        }
+
+        Res<Rc<Property>> parse(Cursor<Css::Sst>& c) const override {
+            return Ok(makeRc<ObjectFitProperty>(self(), try$(parseValue<ObjectFit>(c))));
+        }
+    };
+
+    ObjectFit _value;
+
+    ObjectFitProperty(Rc<Property::Registration> registration, ObjectFit value)
+        : Property(registration), _value(value) {}
+
+    void apply(ComputedValues& c) const override {
+        c.sizing.cow().objectFit = _value;
+    }
+
+    void repr(Io::Emit& e) const override {
+        e("{}", _value);
+    }
+};
+
 } // namespace Vaev::Style

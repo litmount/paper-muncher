@@ -221,6 +221,70 @@ Rc<Scene::Node> _paintSVGRoot(SvgRootFrag& svgRoot, Gfx::Color currentColor) {
     return makeRc<Scene::Transform>(content, svgRoot.transf);
 }
 
+static Math::Rectf _fitImageToContentBox(Math::Rectf imageBound, Math::Rectf contentBox, ObjectFit objectFit) {
+    if (imageBound.width <= 0 or imageBound.height <= 0 or
+        contentBox.width <= 0 or contentBox.height <= 0)
+        return contentBox;
+
+    auto containRect = [&]() {
+        auto scale = min(
+            contentBox.width / imageBound.width,
+            contentBox.height / imageBound.height
+        );
+        auto width = imageBound.width * scale;
+        auto height = imageBound.height * scale;
+        return Math::Rectf{
+            contentBox.center().x - width / 2,
+            contentBox.center().y - height / 2,
+            width,
+            height
+        };
+    };
+
+    auto coverRect = [&]() {
+        auto scale = max(
+            contentBox.width / imageBound.width,
+            contentBox.height / imageBound.height
+        );
+        auto width = imageBound.width * scale;
+        auto height = imageBound.height * scale;
+        return Math::Rectf{
+            contentBox.center().x - width / 2,
+            contentBox.center().y - height / 2,
+            width,
+            height
+        };
+    };
+
+    auto noneRect = [&]() {
+        return Math::Rectf{
+            contentBox.center().x - imageBound.width / 2,
+            contentBox.center().y - imageBound.height / 2,
+            imageBound.width,
+            imageBound.height
+        };
+    };
+
+    switch (objectFit) {
+    case ObjectFit::FILL:
+        return contentBox;
+    case ObjectFit::CONTAIN:
+        return containRect();
+    case ObjectFit::COVER:
+        return coverRect();
+    case ObjectFit::NONE:
+        return noneRect();
+    case ObjectFit::SCALE_DOWN: {
+        auto candidate = noneRect();
+        if (candidate.width <= contentBox.width and candidate.height <= contentBox.height)
+            return candidate;
+        return containRect();
+    }
+    default:
+        return contentBox;
+    }
+}
+
 static void _paintFrag(Frag& frag, Scene::Stack& stack, Opt<UsedBorders> usedBorders = NONE) {
     auto& s = frag.style();
 
@@ -235,7 +299,8 @@ static void _paintFrag(Frag& frag, Scene::Stack& stack, Opt<UsedBorders> usedBor
         auto bound = (*image)->bound();
 
         auto contentBox = frag.metrics.contentBox().cast<f64>();
-        auto trans = Math::Trans2f::map(bound, contentBox);
+        auto fitRect = _fitImageToContentBox(bound, contentBox, frag.style().sizing->objectFit);
+        auto trans = Math::Trans2f::map(bound, fitRect);
         Rc<Scene::Node> node = makeRc<Scene::Transform>(*image, trans);
 
         auto radii = frag.metrics.radii;

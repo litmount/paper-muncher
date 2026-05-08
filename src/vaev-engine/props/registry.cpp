@@ -199,6 +199,7 @@ export RegisteredPropertySet const& defaultRegistry() {
         registry.registerProperty<MinHeightProperty>();
         registry.registerProperty<MaxWidthProperty>();
         registry.registerProperty<MaxHeightProperty>();
+        registry.registerProperty<ObjectFitProperty>();
 
         // Text
         registry.registerProperty<TextAlignProperty>();
